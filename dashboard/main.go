@@ -45,10 +45,6 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 <body>
     <h1>TCPing Dashboard</h1>
     <div class="nodes">
-        <h2>测试节点</h2>
-        <div id="nodeList">
-            {{range .}}<div>{{.Name}} ({{.URL}})</div>{{end}}
-        </div>
     </div>
     <hr>
     <h2>TCP测试</h2>
