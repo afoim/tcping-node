@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 配置
-BINARY_NAME="tcping-agent"
+BINARY_NAME="agent"
 INSTALL_DIR="/usr/local/bin"
 SERVICE_NAME="tcping-agent"
 CONFIG_DIR="/etc/tcping-node"
