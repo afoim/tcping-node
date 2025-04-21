@@ -30,7 +30,7 @@ install_service() {
     mkdir -p $INSTALL_DIR
 
     # 下载最新release
-    LATEST_RELEASE=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest)
+    LATEST_RELEASE=$(curl -s https://api-github-com.072103.xyz/repos/$GITHUB_REPO/releases/latest)
     DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep "browser_download_url.*agent" | cut -d '"' -f 4)
     curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/agent"
     chmod +x "$INSTALL_DIR/agent"
