@@ -6,6 +6,7 @@ INSTALL_DIR="/usr/local/bin"
 SERVICE_NAME="tcping-agent"
 CONFIG_DIR="/etc/tcping-node"
 DEFAULT_PORT=8081
+DOWNLOAD_URL="https://mirror.ghproxy.com/https://github.com/afoim/tcping-node/releases/download/latest/agent"
 
 # 确保以root权限运行
 if [ "$EUID" -ne 0 ]; then 
@@ -23,37 +24,6 @@ else
     PORT=$DEFAULT_PORT
     echo "PORT=$PORT" > "$CONFIG_DIR/config"
 fi
-
-# Github加速镜像列表
-GITHUB_MIRRORS=(
-    "https://github.com"
-    "https://download.fastgit.org"
-    "https://mirror.ghproxy.com/https://github.com"
-)
-
-# 询问是否使用加速镜像
-select_mirror() {
-    echo "请选择下载源:"
-    echo "1) Github 原地址"
-    echo "2) FastGit 镜像"
-    echo "3) GHProxy 镜像"
-    read -p "请选择 (1-3, 默认1): " mirror_choice
-    
-    case "$mirror_choice" in
-        2)
-            echo "使用 FastGit 镜像"
-            GITHUB_URL=${GITHUB_MIRRORS[1]}
-            ;;
-        3)
-            echo "使用 GHProxy 镜像"
-            GITHUB_URL=${GITHUB_MIRRORS[2]}
-            ;;
-        *)
-            echo "使用 Github 原地址"
-            GITHUB_URL=${GITHUB_MIRRORS[0]}
-            ;;
-    esac
-}
 
 # 显示帮助信息
 show_help() {
@@ -92,41 +62,40 @@ EOF
 
 # 安装agent
 install_agent() {
-    select_mirror
     echo "正在下载agent..."
-    
-    # 获取最新release的tag
-    LATEST_TAG=$(curl -s "https://api.github.com/repos/afoim/tcping-node/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$LATEST_TAG" ]; then
-        LATEST_TAG="v1.0.0"  # 如果获取失败，使用默认版本
-    fi
-    
-    DOWNLOAD_URL="$GITHUB_URL/afoim/tcping-node/releases/download/$LATEST_TAG/agent"
-    echo "下载地址: $DOWNLOAD_URL"
-    
-    # 使用临时文件下载
-    TMP_FILE=$(mktemp)
-    if wget -q -O "$TMP_FILE" "$DOWNLOAD_URL"; then
-        # 检查文件类型
-        FILE_TYPE=$(file -b "$TMP_FILE")
-        if [[ $FILE_TYPE == *"ELF"* ]]; then  # 验证是否为Linux可执行文件
-            mv "$TMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
-            chmod +x "$INSTALL_DIR/$BINARY_NAME"
-            install_service
-            echo "安装完成"
-            echo "当前端口: $PORT"
-            systemctl start $SERVICE_NAME
-        else
-            echo "错误: 下载的文件不是有效的可执行文件"
-            echo "文件类型: $FILE_TYPE"
-            rm -f "$TMP_FILE"
-            exit 1
-        fi
-    else
-        echo "下载失败，请检查网络连接或尝试其他镜像"
-        rm -f "$TMP_FILE"
+    wget -q -O "$INSTALL_DIR/$BINARY_NAME" "$DOWNLOAD_URL" || {
+        echo "下载失败，请检查网络连接"
         exit 1
+    }
+    
+    chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    install_service
+    echo "安装完成"
+    echo "当前端口: $PORT"
+    systemctl start $SERVICE_NAME
+    show_ip_info
+}
+
+# 添加IP信息显示函数
+show_ip_info() {
+    echo -e "\n节点信息:"
+    echo "----------------------------------------"
+    # 获取内网IP
+    local internal_ips=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1')
+    echo "内网地址:"
+    echo "$internal_ips" | while read -r ip; do
+        echo "http://$ip:$PORT"
+    done
+    
+    # 获取外网IP
+    echo -e "\n外网地址:"
+    local external_ip=$(curl -s ip.sb || curl -s ifconfig.me)
+    if [ ! -z "$external_ip" ]; then
+        echo "http://$external_ip:$PORT"
+    else
+        echo "无法获取外网IP"
     fi
+    echo "----------------------------------------"
 }
 
 # 更改端口
@@ -148,6 +117,7 @@ get_version() {
         echo "Agent路径: $INSTALL_DIR/$BINARY_NAME"
         echo "监听端口: $PORT"
         echo "服务状态: $(systemctl is-active $SERVICE_NAME)"
+        show_ip_info
     else
         echo "Agent未安装"
     fi
