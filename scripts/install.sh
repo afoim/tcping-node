@@ -121,6 +121,43 @@ download_and_install() {
     rm -rf "$TMP_DIR"
 }
 
+# 显示帮助信息
+show_help() {
+    echo "用法: $0 [命令]"
+    echo "命令:"
+    echo "  install    - 安装或更新agent"
+    echo "  uninstall  - 卸载agent"
+    echo "  start      - 启动服务"
+    echo "  stop       - 停止服务"
+    echo "  restart    - 重启服务"
+    echo "  status     - 查看服务状态"
+    echo "  port       - 更改端口"
+    echo "  version    - 显示当前版本"
+}
+
+# 卸载函数
+uninstall() {
+    echo "正在卸载TCPing Agent..."
+    
+    # 停止并删除服务
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        systemctl stop $SERVICE_NAME
+        systemctl disable $SERVICE_NAME
+    fi
+    
+    # 删除服务文件
+    rm -f "/etc/systemd/system/$SERVICE_NAME.service"
+    systemctl daemon-reload
+    
+    # 删除二进制文件
+    rm -f "$INSTALL_DIR/$BINARY_NAME"
+    
+    # 删除配置目录
+    rm -rf "$CONFIG_DIR"
+    
+    echo "卸载完成！"
+}
+
 # 主程序
 main() {
     check_existing_service
@@ -131,4 +168,34 @@ main() {
     systemctl status $SERVICE_NAME
 }
 
-main
+# 主命令处理
+case "$1" in
+    "install")
+        main
+        ;;
+    "uninstall")
+        uninstall
+        ;;
+    "start")
+        systemctl start $SERVICE_NAME
+        ;;
+    "stop")
+        systemctl stop $SERVICE_NAME
+        ;;
+    "restart")
+        systemctl restart $SERVICE_NAME
+        ;;
+    "status")
+        systemctl status $SERVICE_NAME
+        ;;
+    "port")
+        configure_port
+        systemctl restart $SERVICE_NAME
+        ;;
+    "version")
+        echo "当前版本: $(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')"
+        ;;
+    *)
+        show_help
+        ;;
+esac
