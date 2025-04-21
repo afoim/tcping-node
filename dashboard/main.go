@@ -6,19 +6,37 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
 
-// 硬编码节点列表
-var nodes = []struct {
-	Name string
-	URL  string
-}{
-	{"安徽合肥移动PC-家宽", "http://192.168.124.15:8081"},
-	{"安徽合肥移动NAS-家宽", "http://192.168.124.14:8081"},
-	{"Akile 台湾HiNET-家宽", "http://tw.072103.xyz:20347"},
-	{"雨云 台湾3区-商宽", "http://154.37.213.180:8081"},
+// 定义Node结构体
+type Node struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// 定义配置结构体
+type Config struct {
+	Nodes []Node `json:"nodes"`
+}
+
+var nodes []Node
+
+func init() {
+	// 读取节点配置文件
+	data, err := os.ReadFile("nodes.json")
+	if err != nil {
+		log.Fatalf("无法读取节点配置文件: %v", err)
+	}
+
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		log.Fatalf("解析节点配置文件失败: %v", err)
+	}
+
+	nodes = config.Nodes
 }
 
 func main() {
@@ -141,7 +159,7 @@ func handleTest(w http.ResponseWriter, r *http.Request) {
 
 	for _, node := range nodes {
 		wg.Add(1)
-		go func(node struct{ Name, URL string }) {
+		go func(node Node) {
 			defer wg.Done()
 			reqBody, err := json.Marshal(req)
 			if err != nil {
@@ -190,7 +208,7 @@ func handleCheckNodes(w http.ResponseWriter, r *http.Request) {
 
 	for _, node := range nodes {
 		wg.Add(1)
-		go func(node struct{ Name, URL string }) {
+		go func(node Node) {
 			defer wg.Done()
 
 			client := http.Client{
