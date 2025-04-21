@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // 硬编码节点列表
@@ -14,7 +15,8 @@ var nodes = []struct {
 	Name string
 	URL  string
 }{
-	{"安徽合肥移动-家宽", "http://192.168.124.14:8081"},
+	{"安徽合肥移动PC-家宽", "http://192.168.124.15:8081"},
+	{"安徽合肥移动NAS-家宽", "http://192.168.124.14:8081"},
 	{"Akile 台湾HiNET-家宽", "http://tw.072103.xyz:20347"},
 	{"雨云 台湾3区-商宽", "http://154.37.213.180:8081"},
 }
@@ -22,6 +24,7 @@ var nodes = []struct {
 func main() {
 	http.HandleFunc("/", handleDashboard)
 	http.HandleFunc("/api/test", handleTest)
+	http.HandleFunc("/api/check-nodes", handleCheckNodes) // 添加节点状态检查路由
 
 	log.Printf("Dashboard 启动在 0.0.0.0:8080")
 	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
@@ -40,11 +43,15 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
         .success { color: green; }
         .error { color: red; }
         .nodes { margin: 20px 0; }
+        #nodeStatus { margin: 20px 0; }
+        .node-item { margin: 5px 0; }
     </style>
 </head>
 <body>
     <h1>TCPing Dashboard</h1>
-    <div class="nodes">
+    <div>
+        <button onclick="checkNodesStatus()">检查节点状态</button>
+        <div id="nodeStatus"></div>
     </div>
     <hr>
     <h2>TCP测试</h2>
@@ -83,6 +90,27 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
                 }).join('');
             } catch (err) {
                 resultDiv.innerHTML = '<div class="error">✗ 请求错误: ' + err.message + '</div>';
+            }
+        }
+
+        async function checkNodesStatus() {
+            const statusDiv = document.getElementById('nodeStatus');
+            statusDiv.innerHTML = '正在检查节点状态...';
+            
+            try {
+                const response = await fetch('/api/check-nodes', {
+                    method: 'POST',
+                });
+                
+                const results = await response.json();
+                statusDiv.innerHTML = Object.entries(results).map(([nodeName, status]) => {
+                    const statusClass = status ? 'success' : 'error';
+                    const statusText = status ? '在线' : '离线';
+                    return '<div class="node-item"><span class="' + statusClass + 
+                           '">● </span>' + nodeName + ': ' + statusText + '</div>';
+                }).join('');
+            } catch (err) {
+                statusDiv.innerHTML = '<div class="error">检查节点状态时出错: ' + err.message + '</div>';
             }
         }
     </script>
@@ -145,6 +173,39 @@ func handleTest(w http.ResponseWriter, r *http.Request) {
 
 			resultsMu.Lock()
 			results[node.Name] = result
+			resultsMu.Unlock()
+		}(node)
+	}
+
+	wg.Wait()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+// 添加节点状态检查处理函数
+func handleCheckNodes(w http.ResponseWriter, r *http.Request) {
+	results := make(map[string]bool)
+	var wg sync.WaitGroup
+	resultsMu := sync.Mutex{}
+
+	for _, node := range nodes {
+		wg.Add(1)
+		go func(node struct{ Name, URL string }) {
+			defer wg.Done()
+
+			client := http.Client{
+				Timeout: 5 * time.Second,
+			}
+
+			resp, err := client.Get(node.URL + "/health")
+			isOnline := err == nil && resp.StatusCode == http.StatusOK
+
+			if resp != nil {
+				resp.Body.Close()
+			}
+
+			resultsMu.Lock()
+			results[node.Name] = isOnline
 			resultsMu.Unlock()
 		}(node)
 	}

@@ -15,6 +15,7 @@ func main() {
 	flag.Parse()
 
 	http.HandleFunc("/api/tcping", handleTcping)
+	http.HandleFunc("/health", handleHealth) // 添加健康检查端点
 	address := fmt.Sprintf("0.0.0.0:%d", *port)
 	log.Printf("Agent 启动在 %s", address)
 	log.Fatal(http.ListenAndServe(address, nil))
@@ -47,4 +48,10 @@ func handleTcping(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// 新增健康检查处理函数
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"status": true})
 }
