@@ -94,21 +94,39 @@ EOF
 install_agent() {
     select_mirror
     echo "正在下载agent..."
-    DOWNLOAD_URL="$GITHUB_URL/afoim/tcping-node/releases/download/latest/agent"
-    echo "下载地址: $DOWNLOAD_URL"
-    wget -O "$INSTALL_DIR/$BINARY_NAME" "$DOWNLOAD_URL"
     
-    if [ $? -ne 0 ]; then
-        echo "下载失败，请检查网络连接或尝试其他镜像"
-        exit 1
+    # 获取最新release的tag
+    LATEST_TAG=$(curl -s "https://api.github.com/repos/afoim/tcping-node/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -z "$LATEST_TAG" ]; then
+        LATEST_TAG="v1.0.0"  # 如果获取失败，使用默认版本
     fi
     
-    chmod +x "$INSTALL_DIR/$BINARY_NAME"
-    install_service
+    DOWNLOAD_URL="$GITHUB_URL/afoim/tcping-node/releases/download/$LATEST_TAG/agent"
+    echo "下载地址: $DOWNLOAD_URL"
     
-    echo "安装完成"
-    echo "当前端口: $PORT"
-    systemctl start $SERVICE_NAME
+    # 使用临时文件下载
+    TMP_FILE=$(mktemp)
+    if wget -q -O "$TMP_FILE" "$DOWNLOAD_URL"; then
+        # 检查文件类型
+        FILE_TYPE=$(file -b "$TMP_FILE")
+        if [[ $FILE_TYPE == *"ELF"* ]]; then  # 验证是否为Linux可执行文件
+            mv "$TMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
+            chmod +x "$INSTALL_DIR/$BINARY_NAME"
+            install_service
+            echo "安装完成"
+            echo "当前端口: $PORT"
+            systemctl start $SERVICE_NAME
+        else
+            echo "错误: 下载的文件不是有效的可执行文件"
+            echo "文件类型: $FILE_TYPE"
+            rm -f "$TMP_FILE"
+            exit 1
+        fi
+    else
+        echo "下载失败，请检查网络连接或尝试其他镜像"
+        rm -f "$TMP_FILE"
+        exit 1
+    fi
 }
 
 # 更改端口
