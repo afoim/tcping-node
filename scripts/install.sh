@@ -24,8 +24,10 @@ check_existing_service() {
         echo "1) 升级服务"
         echo "2) 查看服务状态"
         echo "3) 修改端口"
-        echo "4) 退出"
-        read -p "请选择操作 (1-4): " choice
+        echo "4) 卸载服务"
+        echo "5) 退出"
+        
+        read -p "请选择操作 (1-5): " choice
         case $choice in
             1)
                 echo "正在升级..."
@@ -40,6 +42,12 @@ check_existing_service() {
                 configure_port
                 systemctl restart $SERVICE_NAME
                 echo "端口已更新"
+                ;;
+            4)
+                read -p "确认卸载? (y/n): " confirm
+                if [ "$confirm" = "y" ]; then
+                    uninstall
+                fi
                 ;;
             *)
                 exit 0
